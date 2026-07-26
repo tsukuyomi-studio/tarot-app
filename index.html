@@ -163,6 +163,17 @@
     background: linear-gradient(90deg, transparent, rgba(201,162,75,.6), transparent);
   }
 
+  textarea.mystic-input{
+    background: rgba(5,7,15,.6);
+    border:1px solid rgba(201,162,75,.35);
+    color: var(--pale);
+  }
+  textarea.mystic-input:focus{
+    outline:none; border-color: var(--gold-bright);
+    box-shadow: 0 0 0 3px rgba(201,162,75,.15);
+  }
+  textarea.mystic-input::placeholder{ color: rgba(245,243,238,.35); }
+
   .screen{ display:none; }
   .screen.active{ display:block; }
 
@@ -190,11 +201,19 @@
   <section id="screen-start" class="screen active w-full max-w-md fade-in-delay1 text-center">
     <div class="rounded-2xl border border-[rgba(201,162,75,.3)] bg-[rgba(11,19,48,.5)] backdrop-blur-sm p-8 shadow-[0_10px_40px_rgba(0,0,0,.5)]">
       <p class="text-2xl mb-3">🌙 ✦ 🌟</p>
-      <p class="text-sm text-[var(--pale)]/80 leading-relaxed mb-6">
+      <p class="text-sm text-[var(--pale)]/80 leading-relaxed mb-5">
         静かに心を落ち着け、問いを胸に浮かべてください。<br>
         3枚のカードが、過去・現在・未来の流れを映し出します。
       </p>
-      <button id="btn-start" class="btn-gold w-full py-3 rounded-lg text-sm sm:text-base font-medium">
+
+      <label for="worry" class="block font-display text-xs gold-text tracking-[0.2em] mb-2 text-left">
+        ✦ 占いたい悩み（任意）
+      </label>
+      <textarea id="worry" rows="3"
+        class="mystic-input w-full rounded-lg px-4 py-3 text-sm leading-relaxed resize-none"
+        placeholder="例）今の仕事を続けるべきか迷っています…"></textarea>
+
+      <button id="btn-start" class="btn-gold w-full mt-5 py-3 rounded-lg text-sm sm:text-base font-medium">
         過去・現在・未来を占う ✦
       </button>
     </div>
@@ -203,6 +222,10 @@
   <!-- SCREEN 2: カード展開 & 結果 -->
   <section id="screen-cards" class="screen w-full max-w-4xl">
     <div class="fade-in mb-6 text-center">
+      <p id="worry-display-wrap" class="mb-4 hidden">
+        <span class="block text-xs text-[var(--pale)]/60 mb-1">あなたの問い</span>
+        <span id="worry-display" class="font-display text-sm sm:text-base gold-text italic"></span>
+      </p>
       <p id="flip-hint" class="text-xs sm:text-sm text-[var(--mist)] pulse-hint">カードをタップして、めくってください</p>
       <div class="glow-line my-5 max-w-xs mx-auto"></div>
     </div>
@@ -265,6 +288,11 @@
       <div class="divider-sigil mb-6"><span class="text-lg">✦</span></div>
       <h2 class="font-display text-center text-lg sm:text-xl gold-text tracking-widest mb-6">READING</h2>
 
+      <div id="reading-message-box" class="rounded-2xl border border-[rgba(201,162,75,.35)] bg-[rgba(11,19,48,.55)] p-6 sm:p-8 mb-8">
+        <p class="font-display text-xs gold-text tracking-[0.2em] mb-3">✦ カードからのメッセージ</p>
+        <p id="reading-message" class="text-sm sm:text-base leading-loose text-[var(--pale)]/90 whitespace-pre-line"></p>
+      </div>
+
       <div id="result-summaries" class="space-y-4"></div>
 
       <div class="flex justify-center mt-8">
@@ -318,17 +346,22 @@ const POSITIONS = [
    ========================================================= */
 let drawnCards = [];
 let flippedCount = 0;
+let userWorry = "";
 
 /* =========================================================
    DOM 参照
    ========================================================= */
 const screenStart = document.getElementById("screen-start");
 const screenCards = document.getElementById("screen-cards");
+const worryTextarea = document.getElementById("worry");
 const btnStart = document.getElementById("btn-start");
 const btnReset = document.getElementById("btn-reset");
+const worryDisplayWrap = document.getElementById("worry-display-wrap");
+const worryDisplay = document.getElementById("worry-display");
 const flipHint = document.getElementById("flip-hint");
 const resultBox = document.getElementById("result-box");
 const resultSummaries = document.getElementById("result-summaries");
+const readingMessage = document.getElementById("reading-message");
 
 /* =========================================================
    3枚をランダムに選ぶ（重複なし・正逆ランダム）
@@ -394,9 +427,56 @@ function flipCard(slotIndex){
 }
 
 /* =========================================================
+   悩みキーワード → テーマ判定（ローカル処理のみ）
+   ========================================================= */
+const WORRY_KEYWORDS = [
+  { words:["仕事","転職","キャリア","職場","上司"], theme:"仕事や役割の在り方" },
+  { words:["恋愛","恋","彼","彼女","片思い","結婚","パートナー"], theme:"人との結びつきや心の距離" },
+  { words:["お金","金銭","収入","貯金","経済"], theme:"豊かさの流れ" },
+  { words:["家族","親","兄弟","子供"], theme:"身近な人との関係" },
+  { words:["健康","体調","病気","疲れ"], theme:"心身のバランス" },
+  { words:["将来","未来","人生","進路"], theme:"これから歩む道" },
+];
+
+function detectTheme(worry){
+  if(!worry) return "あなたを取り巻く物語全体";
+  for(const entry of WORRY_KEYWORDS){
+    if(entry.words.some(w => worry.includes(w))) return entry.theme;
+  }
+  return "あなたが今見つめている問い";
+}
+
+function buildReadingMessage(){
+  const theme = detectTheme(userWorry);
+  const [past, present, future] = drawnCards;
+
+  const worryLine = userWorry
+    ? `「${userWorry}」というあなたの問いに、カードたちはこう答えています。`
+    : `今宵引かれた三枚のカードが、静かに物語を紡いでいます。`;
+
+  const pastLine = `過去には${past.card.icon} ${past.card.name}${past.reversed ? "（逆位置）" : ""}が現れ、${cardMeaningText(past)}が、今のあなたの土台を形づくってきたことを示しています。`;
+
+  const presentLine = `現在に立つのは${present.card.icon} ${present.card.name}${present.reversed ? "（逆位置）" : ""}。これは${cardMeaningText(present)}という状態が、${theme}に色濃く影響していることの表れです。`;
+
+  const futureLine = `そして未来を照らす${future.card.icon} ${future.card.name}${future.reversed ? "（逆位置）" : ""}は、${cardMeaningText(future)}という流れが、これから訪れる可能性を暗示しています。`;
+
+  const closingPool = [
+    "焦らず、カードが示す流れに耳を澄ませてみてください。答えはすでにあなたの中にあります。",
+    "大切なのは結果を急ぐことではなく、今この瞬間の選択を丁寧に重ねることです。",
+    "たとえ困難が見えても、それは変化の入り口に過ぎません。月の満ち欠けのように、物事は巡ります。",
+    "この三枚が示す物語は、あなた自身がこれからどう書き換えてもよいものです。",
+  ];
+  const closing = closingPool[Math.floor(Math.random()*closingPool.length)];
+
+  return `${worryLine}\n\n${pastLine}\n\n${presentLine}\n\n${futureLine}\n\n${closing}`;
+}
+
+/* =========================================================
    結果表示（ローカル処理のみ）
    ========================================================= */
 function showResult(){
+  readingMessage.textContent = buildReadingMessage();
+
   resultSummaries.innerHTML = drawnCards.map(entry => `
     <div class="rounded-xl border border-[rgba(201,162,75,.25)] bg-[rgba(11,19,48,.4)] px-5 py-4 flex items-start gap-4">
       <div class="shrink-0 font-display text-[10px] gold-text tracking-[0.2em] w-14 pt-1">
@@ -423,6 +503,14 @@ function showResult(){
    画面遷移
    ========================================================= */
 function startReading(){
+  userWorry = worryTextarea.value.trim();
+  if(userWorry){
+    worryDisplay.textContent = userWorry;
+    worryDisplayWrap.classList.remove("hidden");
+  } else {
+    worryDisplayWrap.classList.add("hidden");
+  }
+
   drawnCards = drawThreeCards();
   flippedCount = 0;
 
@@ -440,6 +528,7 @@ function startReading(){
 function resetToStart(){
   screenCards.classList.remove("active");
   screenStart.classList.add("active");
+  worryTextarea.value = "";
 }
 
 /* =========================================================
