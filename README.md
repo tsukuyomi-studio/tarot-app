@@ -2,7 +2,7 @@
 
 過去・現在・未来を占うスリーカード・タロット占いのWebアプリです。
 
-🔗 **公開URL**: https://hotan222.github.io/tarot-app/
+🔗 **公開URL**: https://tsukuyomi-studio.github.io/tarot-app/
 
 ## 概要
 
