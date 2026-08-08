@@ -121,34 +121,109 @@
     background: linear-gradient(160deg, #16214a, #080c1e 85%);
     border: 1px solid rgba(201,162,75,.6);
     box-shadow: 0 0 0 1px rgba(201,162,75,.15) inset, 0 10px 30px rgba(0,0,0,.6);
-    display:flex; flex-direction:column; align-items:center; justify-content:center;
-    padding: 0.8rem;
+    display:flex; flex-direction:column; align-items:center;
+    padding: 0.6rem;
+    gap: .35rem;
     text-align:center;
   }
-  .card-icon{
-    width:56px; height:56px; border-radius:50%;
-    display:flex; align-items:center; justify-content:center;
-    font-size: 1.7rem;
-    background: radial-gradient(circle at 35% 30%, rgba(240,211,138,.25), rgba(201,162,75,.05) 70%);
-    border: 1px solid rgba(201,162,75,.5);
-    transition: transform .4s ease;
+  /* カード挿絵フレーム：スケルトン→画像フェードイン→(失敗時)絵文字フォールバック */
+  .card-art-frame{
+    position:relative;
+    width:100%;
+    flex: 1 1 auto;
+    min-height:0;
+    border-radius:.6rem;
+    overflow:hidden;
+    border:1px solid rgba(201,162,75,.45);
+    background: radial-gradient(circle at 35% 25%, rgba(240,211,138,.18), rgba(201,162,75,.05) 70%);
+    transition: transform .5s cubic-bezier(.34,1.4,.64,1);
   }
-  .reversed .card-icon{ transform: rotate(180deg); }
+  .reversed .card-art-frame{ transform: rotate(180deg); }
+  .card-art-skeleton{
+    position:absolute; inset:0;
+    background: linear-gradient(100deg, rgba(201,162,75,.08) 20%, rgba(240,211,138,.24) 40%, rgba(201,162,75,.08) 60%);
+    background-size: 200% 100%;
+    animation: skeletonShimmer 1.4s ease-in-out infinite;
+  }
+  @keyframes skeletonShimmer{
+    0%{ background-position: 200% 0; }
+    100%{ background-position: -200% 0; }
+  }
+  .card-art-img{
+    position:absolute; inset:0;
+    width:100%; height:100%;
+    object-fit:cover;
+    opacity:0;
+    transition: opacity .5s ease;
+  }
+  .card-art-frame.loaded .card-art-img{ opacity:1; }
+  .card-art-frame.loaded .card-art-skeleton,
+  .card-art-frame.error .card-art-skeleton{ opacity:0; }
+  .card-art-fallback{
+    position:absolute; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    font-size:1.9rem;
+    opacity:0;
+    transition:opacity .3s ease;
+  }
+  .card-art-frame.error .card-art-fallback{ opacity:1; }
   .card-numeral{
     font-family:'Cinzel', serif; color: var(--gold);
-    font-size: .65rem; letter-spacing:.2em; margin-top:.5rem;
+    font-size: .62rem; letter-spacing:.2em;
   }
   .card-name{
     font-family:'Cinzel','Noto Serif JP', serif;
     color: var(--gold-bright);
-    font-size: 0.92rem; margin-top:.3rem; line-height:1.3;
+    font-size: 0.88rem; line-height:1.3;
   }
-  .card-orientation{
-    font-size: .62rem; color: var(--mist); margin-top:.25rem; letter-spacing:.15em;
+  .orientation-badge{
+    display:inline-block;
+    padding:.2rem .6rem;
+    border-radius:9999px;
+    font-size:.6rem;
+    letter-spacing:.15em;
+    border:1px solid rgba(201,162,75,.55);
+    color: var(--gold-bright);
+    background: rgba(201,162,75,.08);
+  }
+  .orientation-badge.reversed{
+    border-color: rgba(109,122,168,.7);
+    color: var(--mist);
+    background: rgba(109,122,168,.08);
+  }
+  .keyword-chip{
+    display:inline-block;
+    padding:.15rem .55rem;
+    margin:.15rem .2rem 0 0;
+    border-radius:9999px;
+    font-size:.65rem;
+    border:1px solid rgba(201,162,75,.3);
+    color: var(--pale);
+    background: rgba(201,162,75,.06);
   }
   .position-label{
     font-family:'Cinzel', serif; letter-spacing:.25em; color: var(--gold);
     font-size:.68rem;
+  }
+
+  .card-flip.is-anticipating .card-back{
+    animation: anticipatePulse .55s ease-in-out;
+    pointer-events: none;
+    cursor: default;
+  }
+  @keyframes anticipatePulse{
+    0%{
+      box-shadow: 0 0 0 1px rgba(201,162,75,.12) inset, 0 10px 30px rgba(0,0,0,.55);
+      transform: translateY(0) scale(1);
+    }
+    45%{
+      box-shadow: 0 0 0 1px rgba(240,211,138,.55) inset, 0 0 42px rgba(201,162,75,.6), 0 10px 30px rgba(0,0,0,.55);
+      transform: translateY(-4px) scale(1.035);
+    }
+    100%{
+      box-shadow: 0 0 0 1px rgba(201,162,75,.12) inset, 0 10px 30px rgba(0,0,0,.55);
+      transform: translateY(0) scale(1);
+    }
   }
 
   .fade-in{ animation: fadeIn .8s ease both; }
@@ -178,7 +253,8 @@
   .screen.active{ display:block; }
 
   @media (prefers-reduced-motion: reduce){
-    .card-flip, .fade-in, .fade-in-delay1, .pulse-hint, .starfield{ animation:none !important; transition:none !important; }
+    .card-flip, .card-art-frame, .card-art-skeleton, .fade-in, .fade-in-delay1, .pulse-hint, .starfield,
+    .card-flip.is-anticipating .card-back{ animation:none !important; transition:none !important; }
   }
 </style>
 </head>
@@ -310,30 +386,109 @@
 /* =========================================================
    大アルカナ 22枚データ
    ========================================================= */
+/* =========================================================
+   画像パス設定
+   ・画像は /assets/cards/00.png 〜 21.png のようにIDで命名して配置
+   ・拡張子やフォルダを変える場合はここだけ直せばOK
+   ========================================================= */
+const CARD_IMAGE_DIR = "assets/cards"; // index.html から見た相対パス
+const CARD_IMAGE_EXT = "svg"; // 今回は22枚ともSVGイラストを同梱（PNG/JPGに差し替える場合はここを変更）
+
 const MAJOR_ARCANA = [
-  { num:0,  name:"愚者", en:"The Fool", icon:"🃏", up:"新しい始まり、自由、無邪気な冒険心", rev:"無謀さ、計画性の欠如、迷走" },
-  { num:1,  name:"魔術師", en:"The Magician", icon:"✨", up:"創造力、意志の力、物事を動かす才覚", rev:"力の空回り、自信過剰、詐術" },
-  { num:2,  name:"女教皇", en:"The High Priestess", icon:"🌙", up:"直感、静かな知恵、内なる声への信頼", rev:"直感の無視、秘密、感情の抑圧" },
-  { num:3,  name:"女帝", en:"The Empress", icon:"🌸", up:"豊かさ、慈しみ、創造と実り", rev:"過保護、停滞、自己犠牲のしすぎ" },
-  { num:4,  name:"皇帝", en:"The Emperor", icon:"👑", up:"秩序、安定、揺るがない意志", rev:"支配欲、頑固さ、統制の行き過ぎ" },
-  { num:5,  name:"教皇", en:"The Hierophant", icon:"🔔", up:"伝統、学び、信頼できる導き", rev:"型にはまること、既成概念への反発" },
-  { num:6,  name:"恋人", en:"The Lovers", icon:"💞", up:"調和、選択、心からの結びつき", rev:"すれ違い、優柔不断、価値観のズレ" },
-  { num:7,  name:"戦車", en:"The Chariot", icon:"🏹", up:"前進する力、意志の勝利、集中", rev:"方向性の喪失、暴走、自制の乱れ" },
-  { num:8,  name:"力", en:"Strength", icon:"🦁", up:"内なる強さ、忍耐、優しさによる克服", rev:"自信の喪失、感情のコントロール不足" },
-  { num:9,  name:"隠者", en:"The Hermit", icon:"🏮", up:"内省、孤独の中の気づき、静かな探求", rev:"孤立、閉じこもり、答えの先延ばし" },
-  { num:10, name:"運命の輪", en:"Wheel of Fortune", icon:"🎡", up:"転機、巡り合わせ、流れの変化", rev:"停滞、悪循環、望まぬ変化" },
-  { num:11, name:"正義", en:"Justice", icon:"⚖️", up:"公正、均衡、誠実な決断", rev:"偏り、不誠実、判断の誤り" },
-  { num:12, name:"吊るされた男", en:"The Hanged Man", icon:"🔄", up:"視点の転換、忍耐の先の気づき", rev:"無駄な我慢、停滞、犠牲の空回り" },
-  { num:13, name:"死神", en:"Death", icon:"🥀", up:"終わりと再生、手放すことで開ける道", rev:"変化への抵抗、執着、先延ばし" },
-  { num:14, name:"節制", en:"Temperance", icon:"🍷", up:"調和、バランス、穏やかな統合", rev:"不調和、極端さ、過不足" },
-  { num:15, name:"悪魔", en:"The Devil", icon:"😈", up:"誘惑、執着、逃れがたい欲求との対峙", rev:"束縛からの解放、気づきによる脱却" },
-  { num:16, name:"塔", en:"The Tower", icon:"🗼", up:"突然の崩壊、価値観を揺るがす衝撃", rev:"最悪期の回避、緩やかな変化への移行" },
-  { num:17, name:"星", en:"The Star", icon:"⭐", up:"希望、癒し、静かな確信", rev:"希望の喪失、自信のなさ、理想と現実の乖離" },
-  { num:18, name:"月", en:"The Moon", icon:"🌕", up:"不安、幻惑、見えないものへの恐れ", rev:"不安の解消、真実が見え始める兆し" },
-  { num:19, name:"太陽", en:"The Sun", icon:"☀️", up:"成功、喜び、屈託のない達成感", rev:"一時的な曇り、喜びの遅れ、過信" },
-  { num:20, name:"審判", en:"Judgement", icon:"📯", up:"覚醒、再生、過去を経ての決断", rev:"迷い、決断の先送り、過去への囚われ" },
-  { num:21, name:"世界", en:"The World", icon:"🌍", up:"完成、達成、一つの物語の締めくくり", rev:"未完了、あと一歩の足踏み、区切りの遅れ" },
+  { id:"00", name:"愚者", nameEn:"The Fool", icon:"🃏",
+    keywordsUpright:["新しい始まり","自由","冒険心"], keywordsReversed:["無謀さ","計画性の欠如","迷走"],
+    meaningUpright:"何ものにも縛られない自由な心で、新しい一歩を踏み出すとき。先の見えない道でも、好奇心と軽やかな行動力があなたを正しい方向へ導いてくれます。",
+    meaningReversed:"勢いだけで動いてしまい、足元がおろそかになっているサイン。楽観的な気持ちは大切にしつつも、一度立ち止まって計画を練り直す時間を持ちましょう。" },
+  { id:"01", name:"魔術師", nameEn:"The Magician", icon:"✨",
+    keywordsUpright:["創造力","意志の力","才覚"], keywordsReversed:["力の空回り","自信過剰","詐術"],
+    meaningUpright:"あなたの中にはすでに物事を動かすための力が備わっています。アイデアを行動に移す意志さえあれば、望む現実を自らの手で創り出せるでしょう。",
+    meaningReversed:"能力はあるのに、それをうまく発揮できずに空回りしている状態かもしれません。焦って取り繕おうとせず、地に足をつけて一つずつ丁寧に進めてください。" },
+  { id:"02", name:"女教皇", nameEn:"The High Priestess", icon:"🌙",
+    keywordsUpright:["直感","静かな知恵","内なる声"], keywordsReversed:["直感の無視","秘密","感情の抑圧"],
+    meaningUpright:"言葉にならない感覚の中に、大切な答えが隠れています。静けさの中で自分の内なる声に耳を澄ませることで、進むべき道が自然と見えてくるでしょう。",
+    meaningReversed:"頭でばかり考えて、心の声を置き去りにしていませんか。感情を抑え込みすぎると、大切なサインを見逃してしまうかもしれません。" },
+  { id:"03", name:"女帝", nameEn:"The Empress", icon:"🌸",
+    keywordsUpright:["豊かさ","慈しみ","実り"], keywordsReversed:["過保護","停滞","自己犠牲"],
+    meaningUpright:"愛情を注いできたものが、ゆっくりと実を結ぼうとしています。自分自身にも周りの人にも、惜しみない優しさを注ぐことで豊かさが広がっていくでしょう。",
+    meaningReversed:"与えすぎて、自分を後回しにしていませんか。誰かを想う気持ちは尊いものですが、自分を犠牲にし続けると心も物事も停滞してしまいます。" },
+  { id:"04", name:"皇帝", nameEn:"The Emperor", icon:"👑",
+    keywordsUpright:["秩序","安定","意志"], keywordsReversed:["支配欲","頑固さ","統制過多"],
+    meaningUpright:"揺るぎない意志と規律が、物事に確かな土台を築いてくれます。責任を持って自分の役割を果たすことで、周囲からの信頼も自然と厚くなるでしょう。",
+    meaningReversed:"コントロールしようとする力が強くなりすぎているようです。頑なな姿勢を少し緩め、他者の意見にも耳を傾ける柔軟さを取り戻してみてください。" },
+  { id:"05", name:"教皇", nameEn:"The Hierophant", icon:"🔔",
+    keywordsUpright:["伝統","学び","導き"], keywordsReversed:["型にはまること","既成概念への反発","形式主義"],
+    meaningUpright:"経験を積んだ人の教えや、これまで培われてきた知恵が力になるときです。素直に学ぶ姿勢が、あなたを確かな道へと導いてくれるでしょう。",
+    meaningReversed:"従来のやり方や常識に、窮屈さを感じているのかもしれません。時にはルールの外に目を向けることで、新しい答えが見つかることもあります。" },
+  { id:"06", name:"恋人", nameEn:"The Lovers", icon:"💞",
+    keywordsUpright:["調和","選択","結びつき"], keywordsReversed:["すれ違い","優柔不断","価値観のズレ"],
+    meaningUpright:"心からの信頼で結ばれた関係が、あなたを支えてくれています。素直な気持ちに従って選択することで、より深い調和が生まれていくでしょう。",
+    meaningReversed:"気持ちがすれ違い、素直になれずにいませんか。決断を先延ばしにするほど、心の距離は広がってしまうかもしれません。" },
+  { id:"07", name:"戦車", nameEn:"The Chariot", icon:"🏹",
+    keywordsUpright:["前進","意志の勝利","集中力"], keywordsReversed:["方向性の喪失","暴走","自制の乱れ"],
+    meaningUpright:"迷いを振り切り、まっすぐに前へ進む力が満ちています。強い意志と集中力があれば、多少の障害があっても乗り越えていけるでしょう。",
+    meaningReversed:"勢いはあるものの、進むべき方向を見失っているようです。力任せに突き進む前に、一度手綱を握り直してみてください。" },
+  { id:"08", name:"力", nameEn:"Strength", icon:"🦁",
+    keywordsUpright:["内なる強さ","忍耐","優しさ"], keywordsReversed:["自信の喪失","感情の乱れ","無力感"],
+    meaningUpright:"力任せではなく、静かな忍耐と優しさこそが本当の強さです。困難な状況も、穏やかな心で向き合うことで乗り越えていけるでしょう。",
+    meaningReversed:"自分の力を信じきれず、不安に飲み込まれそうになっているのかもしれません。まずは深呼吸をして、これまで乗り越えてきた自分を思い出してください。" },
+  { id:"09", name:"隠者", nameEn:"The Hermit", icon:"🏮",
+    keywordsUpright:["内省","気づき","静かな探求"], keywordsReversed:["孤立","閉じこもり","先延ばし"],
+    meaningUpright:"一人静かに自分と向き合う時間が、大切な気づきをもたらしてくれます。外の声から離れ、内なる灯りを頼りに答えを探してみましょう。",
+    meaningReversed:"一人の時間が、孤立へと変わってしまっていませんか。向き合うべき問いから目をそらし続けると、答えはいつまでも見つからないままです。" },
+  { id:"10", name:"運命の輪", nameEn:"Wheel of Fortune", icon:"🎡",
+    keywordsUpright:["転機","巡り合わせ","流れの変化"], keywordsReversed:["停滞","悪循環","望まぬ変化"],
+    meaningUpright:"物事の流れが大きく動き出す、転機のタイミングです。思いがけない巡り合わせが、新しい可能性の扉を開いてくれるでしょう。",
+    meaningReversed:"同じところをぐるぐると回っているような、停滞感を覚えているかもしれません。悪循環を断ち切るには、小さな一歩から流れを変える勇気が必要です。" },
+  { id:"11", name:"正義", nameEn:"Justice", icon:"⚖️",
+    keywordsUpright:["公正","均衡","誠実な決断"], keywordsReversed:["偏り","不誠実","判断の誤り"],
+    meaningUpright:"感情に流されず、公正な視点で物事を見極めるときです。誠実な判断を積み重ねることで、正しいバランスが取り戻されていくでしょう。",
+    meaningReversed:"どちらかに偏った見方をして、大切なものを見落としていないでしょうか。一度距離を置いて、フラットな視点で物事を見直してみてください。" },
+  { id:"12", name:"吊るされた男", nameEn:"The Hanged Man", icon:"🔄",
+    keywordsUpright:["視点の転換","忍耐","気づき"], keywordsReversed:["無駄な我慢","停滞","空回りの犠牲"],
+    meaningUpright:"今はあえて動かず、視点を変えてみる時期です。不自由に見える状況の中にこそ、これまで気づけなかった新しい発見が隠れています。",
+    meaningReversed:"我慢すること自体が目的になってしまい、状況が前に進んでいないようです。その忍耐が本当に必要なものか、一度見つめ直してみましょう。" },
+  { id:"13", name:"死神", nameEn:"Death", icon:"🥀",
+    keywordsUpright:["終わりと再生","手放す","再出発"], keywordsReversed:["変化への抵抗","執着","先延ばし"],
+    meaningUpright:"一つの物語が終わりを迎え、新しい始まりへの扉が開かれようとしています。手放すことを恐れないでください、その先に本当に必要なものが待っています。",
+    meaningReversed:"終わらせるべきものに、まだしがみついてしまっているようです。変化を先延ばしにするほど、次の一歩を踏み出すのが難しくなってしまいます。" },
+  { id:"14", name:"節制", nameEn:"Temperance", icon:"🍷",
+    keywordsUpright:["調和","バランス","穏やかな統合"], keywordsReversed:["不調和","極端さ","過不足"],
+    meaningUpright:"相反するものを上手に混ぜ合わせ、穏やかな調和を生み出せるときです。焦らず、ゆっくりとバランスを整えていくことを大切にしてください。",
+    meaningReversed:"どちらかに偏りすぎて、心身のバランスを崩しているのかもしれません。極端な選択を一度手放し、ちょうど良い加減を探ってみましょう。" },
+  { id:"15", name:"悪魔", nameEn:"The Devil", icon:"😈",
+    keywordsUpright:["誘惑","執着","逃れがたい欲求"], keywordsReversed:["束縛からの解放","気づき","脱却"],
+    meaningUpright:"甘い誘惑や強い執着に、心が絡め取られているようです。まずはそれに気づくことが、そこから抜け出すための最初の一歩になります。",
+    meaningReversed:"あなたを縛っていたものから、少しずつ解放され始めています。自分を苦しめていた習慣や関係性に気づいたことが、脱却への大きな力になるでしょう。" },
+  { id:"16", name:"塔", nameEn:"The Tower", icon:"🗼",
+    keywordsUpright:["突然の崩壊","衝撃","価値観の揺らぎ"], keywordsReversed:["最悪期の回避","緩やかな変化","小さな崩壊"],
+    meaningUpright:"これまで信じてきた価値観が、大きく揺さぶられる出来事が起こるかもしれません。衝撃は大きくとも、そこには古い殻を破るための意味が込められています。",
+    meaningReversed:"最悪の事態はどうにか回避できているようです。とはいえ小さな綻びは残っているので、根本の見直しは先延ばしにしない方がよいでしょう。" },
+  { id:"17", name:"星", nameEn:"The Star", icon:"⭐",
+    keywordsUpright:["希望","癒し","静かな確信"], keywordsReversed:["希望の喪失","自信のなさ","理想との乖離"],
+    meaningUpright:"傷ついた心が、静かに癒されていくときです。夜空の星のように、小さな希望の光を信じて、穏やかに前を向いていきましょう。",
+    meaningReversed:"理想と現実の差に、希望を見失いかけているのかもしれません。それでも心の奥の小さな光は消えていません、焦らず取り戻していきましょう。" },
+  { id:"18", name:"月", nameEn:"The Moon", icon:"🌕",
+    keywordsUpright:["不安","幻惑","見えない恐れ"], keywordsReversed:["不安の解消","真実の兆し","霧が晴れる"],
+    meaningUpright:"はっきりとしない状況に、漠然とした不安を感じているかもしれません。すべてを今すぐ理解しようとせず、霧が晴れるのを静かに待つことも大切です。",
+    meaningReversed:"これまで見えなかった真実が、少しずつ明らかになり始めています。不安の霧が晴れていくにつれて、心も軽くなっていくでしょう。" },
+  { id:"19", name:"太陽", nameEn:"The Sun", icon:"☀️",
+    keywordsUpright:["成功","喜び","達成感"], keywordsReversed:["一時的な曇り","喜びの遅れ","過信"],
+    meaningUpright:"努力してきたことが、明るい形で実を結ぼうとしています。屈託のない喜びと自信を持って、その成果を存分に味わってください。",
+    meaningReversed:"本来の輝きが、一時的に雲に隠れているだけです。焦らなくても、あなたの努力はもうすぐ日の目を見るときが来るでしょう。" },
+  { id:"20", name:"審判", nameEn:"Judgement", icon:"📯",
+    keywordsUpright:["覚醒","再生","決断"], keywordsReversed:["迷い","決断の先送り","過去への囚われ"],
+    meaningUpright:"過去の経験すべてが糧となり、大切な決断を下すときが来ています。呼び覚まされた本当の望みに、正直に従ってみてください。",
+    meaningReversed:"過去の出来事にとらわれ、前に進む決断ができずにいるようです。まずはその経験を許し、区切りをつけることから始めてみましょう。" },
+  { id:"21", name:"世界", nameEn:"The World", icon:"🌍",
+    keywordsUpright:["完成","達成","締めくくり"], keywordsReversed:["未完了","あと一歩","区切りの遅れ"],
+    meaningUpright:"長い物語が、美しい形でひとつの区切りを迎えようとしています。ここまで積み重ねてきた努力を、誇りを持って受け取ってください。",
+    meaningReversed:"完成まであと一歩のところで、足踏みしてしまっているようです。焦らずとも、その仕上げの一歩を諦めずに続けていきましょう。" },
 ];
+
+// 画像パスを一元生成（フォルダ・拡張子を変えたいときはCARD_IMAGE_DIR/CARD_IMAGE_EXTだけ直せばOK）
+MAJOR_ARCANA.forEach(card => {
+  card.image = `${CARD_IMAGE_DIR}/${card.id}.${CARD_IMAGE_EXT}`;
+});
 
 const POSITIONS = [
   { key:"past",    label:"過去",   en:"PAST" },
@@ -378,6 +533,14 @@ function drawThreeCards(){
   return result;
 }
 
+// カードを引いた時点でこっそり画像を先読みしておく（フリップ時の待ち時間を減らす）
+function preloadCardImages(cards){
+  cards.forEach(entry => {
+    const preloadImg = new Image();
+    preloadImg.src = entry.card.image;
+  });
+}
+
 function toRoman(num){
   if(num === 0) return "0";
   const romans = ["I","II","III","IV","V","VI","VII","VIII","IX","X",
@@ -386,11 +549,15 @@ function toRoman(num){
 }
 
 function cardMeaningText(entry){
-  return entry.reversed ? entry.card.rev : entry.card.up;
+  return entry.reversed ? entry.card.meaningReversed : entry.card.meaningUpright;
+}
+
+function cardKeywords(entry){
+  return entry.reversed ? entry.card.keywordsReversed : entry.card.keywordsUpright;
 }
 
 /* =========================================================
-   カード表面を描画
+   カード表面を描画（画像はスケルトン→フェードインで表示）
    ========================================================= */
 function renderCardFront(slotIndex){
   const data = drawnCards[slotIndex];
@@ -398,32 +565,49 @@ function renderCardFront(slotIndex){
   front.classList.toggle("reversed", data.reversed);
 
   front.innerHTML = `
-    <div class="card-icon">${data.card.icon}</div>
-    <p class="card-numeral">ARCANA ${String(data.card.num).padStart(2,"0")} ・ ${toRoman(data.card.num)}</p>
-    <p class="card-name">${data.card.name}<br><span class="text-[0.62rem] tracking-widest text-[var(--mist)]">${data.card.en}</span></p>
-    <p class="card-orientation">${data.reversed ? "逆位置 ・ REVERSED" : "正位置 ・ UPRIGHT"}</p>
+    <div class="card-art-frame">
+      <div class="card-art-skeleton"></div>
+      <img class="card-art-img" alt="${data.card.name}（${data.card.nameEn}）">
+      <div class="card-art-fallback">${data.card.icon}</div>
+    </div>
+    <p class="card-numeral">ARCANA ${data.card.id} ・ ${toRoman(parseInt(data.card.id, 10))}</p>
+    <p class="card-name">${data.card.name}<br><span class="text-[0.62rem] tracking-widest text-[var(--mist)]">${data.card.nameEn}</span></p>
+    <span class="orientation-badge ${data.reversed ? "reversed" : ""}">${data.reversed ? "逆位置 ・ REVERSED" : "正位置 ・ UPRIGHT"}</span>
   `;
+
+  // 画像の読み込み状態に応じてスケルトン⇔本画像⇔フォールバック絵文字を切り替える
+  const frameEl = front.querySelector(".card-art-frame");
+  const imgEl = front.querySelector(".card-art-img");
+  imgEl.addEventListener("load", () => frameEl.classList.add("loaded"));
+  imgEl.addEventListener("error", () => frameEl.classList.add("error"));
+  imgEl.src = data.card.image;
 }
 
 /* =========================================================
-   カードをめくる
+   カードをめくる（一呼吸置いてから3Dフリップ）
    ========================================================= */
 function flipCard(slotIndex){
   const flipEl = document.querySelector(`[data-flip="${slotIndex}"]`);
-  if(flipEl.classList.contains("is-flipped")) return;
+  if(flipEl.classList.contains("is-flipped") || flipEl.classList.contains("is-anticipating")) return;
 
-  renderCardFront(slotIndex);
-  flipEl.classList.add("is-flipped");
-  flippedCount++;
+  // 予兆演出：裏面がひかり、一瞬の「間」を作ってから本番のフリップへ
+  flipEl.classList.add("is-anticipating");
 
-  if(flippedCount === 1){
-    flipHint.textContent = "残り2枚 ・ カードをタップしてください";
-  } else if(flippedCount === 2){
-    flipHint.textContent = "最後の1枚です ・ カードをタップしてください";
-  } else if(flippedCount === 3){
-    flipHint.classList.add("hidden");
-    setTimeout(showResult, 700);
-  }
+  setTimeout(() => {
+    flipEl.classList.remove("is-anticipating");
+    renderCardFront(slotIndex);
+    flipEl.classList.add("is-flipped");
+    flippedCount++;
+
+    if(flippedCount === 1){
+      flipHint.textContent = "残り2枚 ・ カードをタップしてください";
+    } else if(flippedCount === 2){
+      flipHint.textContent = "最後の1枚です ・ カードをタップしてください";
+    } else if(flippedCount === 3){
+      flipHint.classList.add("hidden");
+      setTimeout(showResult, 700);
+    }
+  }, 550);
 }
 
 /* =========================================================
@@ -485,11 +669,14 @@ function showResult(){
       <div>
         <p class="font-display text-sm sm:text-base gold-text">
           ${entry.card.icon} ${entry.card.name}
-          <span class="text-[10px] text-[var(--mist)] ml-1 tracking-widest">
-            ${entry.reversed ? "逆位置" : "正位置"}
-          </span>
         </p>
-        <p class="text-sm text-[var(--pale)]/80 mt-1 leading-relaxed">${cardMeaningText(entry)}</p>
+        <span class="orientation-badge ${entry.reversed ? "reversed" : ""}">
+          ${entry.reversed ? "逆位置 ・ REVERSED" : "正位置 ・ UPRIGHT"}
+        </span>
+        <p class="text-sm text-[var(--pale)]/80 mt-2 leading-relaxed">${cardMeaningText(entry)}</p>
+        <div class="mt-2">
+          ${cardKeywords(entry).map(word => `<span class="keyword-chip">${word}</span>`).join("")}
+        </div>
       </div>
     </div>
   `).join("");
@@ -513,8 +700,9 @@ function startReading(){
 
   drawnCards = drawThreeCards();
   flippedCount = 0;
+  preloadCardImages(drawnCards);
 
-  document.querySelectorAll(".card-flip").forEach(el => el.classList.remove("is-flipped"));
+  document.querySelectorAll(".card-flip").forEach(el => el.classList.remove("is-flipped", "is-anticipating"));
   document.querySelectorAll(".card-face.card-front").forEach(el => { el.innerHTML=""; el.classList.remove("reversed"); });
   resultBox.classList.add("hidden");
   resultBox.classList.remove("fade-in");
