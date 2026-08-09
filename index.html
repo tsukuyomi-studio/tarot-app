@@ -152,7 +152,7 @@
   .card-art-img{
     position:absolute; inset:0;
     width:100%; height:100%;
-    object-fit:contain;
+    object-fit:cover;
     opacity:0;
     transition: opacity .5s ease;
   }
@@ -392,7 +392,7 @@
    ・拡張子やフォルダを変える場合はここだけ直せばOK
    ========================================================= */
 const CARD_IMAGE_DIR = "assets/cards"; // index.html から見た相対パス
-const CARD_IMAGE_EXT = "webp";
+const CARD_IMAGE_EXT = "svg"; // 今回は22枚ともSVGイラストを同梱（PNG/JPGに差し替える場合はここを変更）
 
 const MAJOR_ARCANA = [
   { id:"00", name:"愚者", nameEn:"The Fool", icon:"🃏",
