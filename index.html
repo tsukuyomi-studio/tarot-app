@@ -631,18 +631,9 @@ function detectTheme(worry){
 }
 
 function buildReadingMessage(){
-  const theme = detectTheme(userWorry);
-  const [past, present, future] = drawnCards;
-
   const worryLine = userWorry
     ? `「${userWorry}」というあなたの問いに、カードたちはこう答えています。`
     : `今宵引かれた三枚のカードが、静かに物語を紡いでいます。`;
-
-  const pastLine = `過去には${past.card.icon} ${past.card.name}${past.reversed ? "（逆位置）" : ""}が現れ、${cardMeaningText(past)}が、今のあなたの土台を形づくってきたことを示しています。`;
-
-  const presentLine = `現在に立つのは${present.card.icon} ${present.card.name}${present.reversed ? "（逆位置）" : ""}。これは${cardMeaningText(present)}という状態が、${theme}に色濃く影響していることの表れです。`;
-
-  const futureLine = `そして未来を照らす${future.card.icon} ${future.card.name}${future.reversed ? "（逆位置）" : ""}は、${cardMeaningText(future)}という流れが、これから訪れる可能性を暗示しています。`;
 
   const closingPool = [
     "焦らず、カードが示す流れに耳を澄ませてみてください。答えはすでにあなたの中にあります。",
@@ -652,7 +643,7 @@ function buildReadingMessage(){
   ];
   const closing = closingPool[Math.floor(Math.random()*closingPool.length)];
 
-  return `${worryLine}\n\n${pastLine}\n\n${presentLine}\n\n${futureLine}\n\n${closing}`;
+  return `${worryLine}\n\n${closing}`;
 }
 
 /* =========================================================
